@@ -1,5 +1,11 @@
-import { readFileSync } from 'fs';
-import { zello, CommandLogonRequest } from '../lib';
+import { readFileSync, createReadStream } from 'fs';
+import { zello, CommandLogonRequest, StreamTypes, Codecs } from '../lib';
+import * as fs from 'fs';
+import prism from 'prism-media';
+import Speaker from 'speaker';
+import { decodeCodecHeader, encodeCodecHeader } from '../lib/utils';
+import { getOpusReader, OpusInfo, OpusReader } from '../lib/opus-stream';
+import pEvent from 'p-event';
 
 const ZELLO_SERVER = 'wss://zello.io/ws';
 const WRONG_TOKEN = 'UNEXISTING TOKEN';
@@ -16,7 +22,7 @@ beforeAll(() => {
 });
 
 beforeEach(async () => {
-  await delay(TESTS_DELAY);
+  //await delay(TESTS_DELAY);
 });
 
 function delay(ms: number) {
@@ -147,3 +153,79 @@ test('should send a text message to a channel and get it with another bot', asyn
   await z1.close();
   await z2.close();
 });
+
+test.only('should send mp3 file to a channel and get "on_start_stream" event with another bot', async () => {
+  const sender = await zello(ZELLO_SERVER, function* ({ commands, macros, awaits }) {
+    yield commands.logon(cred1);
+  });
+  const receiver = await zello(ZELLO_SERVER, function* ({ commands }) {
+    yield commands.logon(cred2);
+  });
+  await delay(3000);
+  const [, res] = await Promise.all([
+    sender.run(function* ({ macros }) {
+      const rs = fs.createReadStream('test/fixtures/echoed-ding-459.mp3');
+      yield macros.sendAudio(rs);
+    }),
+    receiver.run(function* ({ awaits }) {
+      const ev = yield awaits.onStreamStart((event) => {
+        return event.from === cred1.username;
+      }, 2000);
+      return ev !== undefined;
+    }),
+  ]);
+  await sender.close();
+  await receiver.close();
+  expect(res).toBe(true);
+}, 20000);
+
+test.only('should send mp3 file to a channel and download it with another bot', async () => {
+  const sender = await zello(ZELLO_SERVER, function* ({ commands, macros, awaits }) {
+    yield commands.logon(cred1);
+  });
+  const receiver = await zello(ZELLO_SERVER, function* ({ commands }) {
+    yield commands.logon(cred2);
+  });
+  await delay(3000);
+  const [, res] = await Promise.all([
+    sender.run(function* ({ macros }) {
+      const rs = fs.createReadStream('test/fixtures/echoed-ding-459.mp3');
+      yield macros.sendAudio(rs);
+    }),
+    receiver.run(function* ({ awaits }) {
+      const ev = yield awaits.onStreamStart((event) => {
+        return event.from === cred1.username;
+      }, 2000);
+      return ev !== undefined;
+    }),
+  ]);
+  await sender.close();
+  await receiver.close();
+  expect(res).toBe(true);
+}, 20000);
+
+test('receive audio from a channel', async () => {
+  const z = await zello(ZELLO_SERVER, function* ({ commands, events }) {
+    yield commands.logon(cred1);
+    events.onStreamStartAudio(({ event, stream }) => {
+      const opusInfo = decodeCodecHeader(event.codec_header);
+      const opusOpt = {
+        rate: opusInfo.inputSampleRate,
+        channels: opusInfo.channels,
+        frameSize: opusInfo.frameSize,
+      };
+      const opusD = new prism.opus.Decoder(opusOpt);
+      // Create the Speaker instance
+      const speaker = new Speaker({
+        channels: opusInfo.channels,
+        //bitDepth: 16,
+        sampleRate: opusInfo.inputSampleRate,
+      });
+      stream.pipe(opusD).pipe(speaker);
+    });
+    // const rs = fs.createReadStream('test/fixtures/01.mp3');
+    // yield commands.sendAudio(rs, { bitrateKbps: 8 });
+  });
+  await delay(30000);
+  await z.close();
+}, 40000);

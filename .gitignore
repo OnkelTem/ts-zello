@@ -1,2 +1,6 @@
 /.idea/
 /node_modules/
+/test/fixtures/*.mp3
+/test/fixtures/*.opus
+!/test/fixtures/echoed-ding-459.mp3
+/dist/

@@ -1,2 +1,2 @@
 export * from './zello';
-export * from './types';
+export * from './api';
