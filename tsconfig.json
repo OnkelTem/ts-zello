@@ -1,14 +1,9 @@
 {
+  "extends": "@tsconfig/node14/tsconfig.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "declaration": true,
-    "esModuleInterop": true,
-    "target": "es6",
-    "strict": true,
-    "moduleResolution": "node",
     "sourceMap": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "declaration": true
   },
-  "lib": ["es2017"],
-  "include": ["lib"]
+  "include": ["lib", "test", "examples"]
 }

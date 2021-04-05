@@ -1,5 +1,11 @@
+import delay from 'delay';
+import pino from 'pino';
+import { Readable, Writable } from 'stream';
+
+import '../lib/config';
 import * as utils from '../lib/utils';
 import * as Api from '../lib/api';
+import { DEFAULT_LOGGER_OPTIONS } from '../lib/logger';
 
 test('test packet pack', () => {
   const buf = Buffer.from(new Uint8Array([1, 2, 3]));
@@ -56,6 +62,30 @@ test('test codec header decode', () => {
   });
 });
 
-test('test toCamel() converter', () => {
-  expect(utils.toCamel('on_channel_status')).toBe('onChannelStatus');
+test('test cancellable delay', async () => {
+  const p = delay(5000, { value: 'foo' });
+  setTimeout(() => {
+    p.clear();
+  }, 500);
+  const res = await p;
+  expect(res).toBe('foo');
+});
+
+test('test DistillStream with packets << readableHighWaterMark', () => {
+  const logger = pino(DEFAULT_LOGGER_OPTIONS);
+  const rs = new Readable({ read() {} });
+  const ds = new utils.StabilizeStream({ bufferSize: 10, logger });
+  const out = new Writable({
+    write(chunk: any, encoding: BufferEncoding, callback: (error?: Error | null) => void) {
+      logger.info('Received: ' + chunk.toString());
+      callback();
+    },
+  });
+  // Создать
+  rs.pipe(ds).pipe(out);
+  // Start seeding
+  rs.push(Buffer.from('test1', 'utf8'));
+  rs.push(Buffer.from('test2', 'utf8'));
+  rs.push(Buffer.from('test3', 'utf8'));
+  rs.push(null);
 });

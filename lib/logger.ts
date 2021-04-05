@@ -1,9 +1,14 @@
-import logger, { Level } from 'pino';
+import { isEnvVar } from './utils';
+import { LoggerOptions } from 'pino';
 
-// const logLevelsMap = new Map([
-//   [0, ]
-// ]);
-// const logLevel = process.argv.filter((item) => item === '-d').length;
-//
-// export default logger({ level });
-export default logger();
+export const DEFAULT_LOGGER_OPTIONS: LoggerOptions = {
+  level: process.env.LOGGER_LEVEL != null ? process.env.LOGGER_LEVEL : 'info',
+  ...(isEnvVar(process.env.LOGGER_PRETTY) && {
+    prettyPrint: {
+      ignore: 'pid,hostname',
+      translateTime: 'SYS:standard',
+      // @ts-ignore
+      singleLine: true,
+    },
+  }),
+};
