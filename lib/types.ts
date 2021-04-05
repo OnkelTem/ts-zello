@@ -1,127 +1,222 @@
-import WebSocket from 'ws';
+import * as Api from './api';
+import { Readable, Writable } from 'stream';
+import { ArrayCombine } from './utility-types';
+import { Logger, LoggerOptions } from 'pino';
+import { WsState } from './ws';
+import { getMacros } from './macros';
 
-/* Commands */
+//
+// Events
+//
 
-export enum CommandNames {
-  LOGON = 'logon',
-  SEND_TEXT_MESSAGE = 'send_text_message',
+// Add custom events
+
+const customEventCodes = ['on_audio_data'] as const;
+const customEventNames = ['onAudioData'] as const;
+
+type StreamGetterOptions = {
+  pcm:
+    | boolean
+    | {
+        resample?: boolean | SamplingRate;
+        stabilize?: boolean | number;
+      };
+};
+
+type StreamGetter = (options?: StreamGetterOptions) => Readable;
+interface CustomEventAudioData {
+  event: Api.EventStreamStart;
+  opusInfo: OpusInfo;
+  getStream: StreamGetter;
+}
+type CustomEventList = [CustomEventAudioData];
+
+type EventCodes = [...typeof Api.eventCodes, ...typeof customEventCodes];
+type EventCode = EventCodes[number];
+type EventNames = [...typeof Api.eventNames, ...typeof customEventNames];
+type EventName = EventNames[number];
+type EventList = [...Api.EventList, ...CustomEventList];
+
+type EventMap = ArrayCombine<EventCodes, EventList>;
+type EventNameToCode = ArrayCombine<EventNames, EventCodes>;
+
+type EventCallback<T extends EventCode> = (data: EventMap[T]) => void;
+type EventCallbacks = {
+  [P in EventCode]?: EventCallback<P>;
+};
+type Event<T extends EventCode> = (cb: EventCallback<T>) => void;
+type Events = {
+  [P in EventName]: Event<EventNameToCode[P]>;
+};
+
+//
+// Commands
+//
+
+// Add custom commands
+
+const customCommandCodes = ['send_data'] as const;
+const customCommandNames = ['sendData'] as const;
+interface CustomCommandSendDataRequest {
+  streamId: number;
+  frameSize: number;
+}
+interface CustomCommandSendDataResponse {
+  stream: Writable;
+}
+type CustomCommandList = [[CustomCommandSendDataRequest, CustomCommandSendDataResponse]];
+
+type CommandCodes = [...typeof Api.commandCodes, ...typeof customCommandCodes];
+type CommandCode = CommandCodes[number];
+type CommandNames = [...typeof Api.commandNames, ...typeof customCommandNames];
+type CommandName = CommandNames[number];
+type CommandList = [...Api.CommandList, ...CustomCommandList];
+
+type CommandMap = ArrayCombine<CommandCodes, CommandList>;
+type CommandNameToCode = ArrayCombine<CommandNames, CommandCodes>;
+
+type Command<T extends CommandCode> = (
+  request: Omit<CommandMap[T][0], 'command'>,
+  timeout?: number,
+) => Promise<CommandMap[T][1]>;
+type Commands = {
+  [P in CommandName]: Command<CommandNameToCode[P]>;
+};
+
+function isCommandSendData(arg: any, command: CommandCode): arg is CustomCommandSendDataRequest {
+  return command === 'send_data';
 }
 
-export interface CommandLogonRequest {
-  username: string;
-  password: string;
-  channel: string;
-  auth_token: string;
+//
+// Awaits
+//
+
+type AwaitFilterCallback<T extends EventCode> = (data: EventMap[T]) => boolean;
+type Await<T extends EventName> = (
+  filter: AwaitFilterCallback<EventNameToCode[T]> | boolean,
+  timeout: number,
+) => Promise<EventMap[EventNameToCode[T]]>;
+type Awaits = {
+  [P in EventName]: Await<P>;
+};
+
+//
+// Script
+//
+
+type Zello = {
+  name: string;
+  ctl: Readonly<Ctl>;
+  events: Readonly<Events>;
+  commands: Readonly<Commands>;
+  awaits: Readonly<Awaits>;
+  macros: Readonly<ReturnType<typeof getMacros>>;
+  logger: Logger;
+};
+
+type ZelloMacro = Omit<Zello, 'macros'>;
+
+type Script<TReturn> =
+  | ((props: Readonly<Zello>) => Generator<Promise<any>, TReturn, any>)
+  | ((props: Readonly<Zello>) => TReturn);
+
+function isScript(arg: any): arg is Script<unknown> {
+  return arg != null && typeof arg === 'function';
 }
 
-export interface CommandSendTextMessageRequest {
-  text: string;
-  for?: string;
+function isScriptGenerator<T, TReturn, TNext>(arg: any): arg is Generator<T, TReturn, TNext> {
+  return arg != null && typeof arg === 'object' && typeof arg.next === 'function' && typeof arg.throw === 'function';
 }
 
-export interface CommandResponse {
-  seq: number;
-  success?: boolean;
-  error?: string;
+//
+// Macros
+//
+
+type Macro<T> = (props: Omit<Zello, 'macros'>) => T;
+
+//
+// Options
+//
+
+type Options = {
+  logger: LoggerOptions | Logger;
+  name: string;
+};
+
+function isOptions(arg: any): arg is Options {
+  return arg != null && typeof arg === 'object' && ((arg as Options).logger != null || (arg as Options).name != null);
 }
 
-export function isCommandResponse(arg: any): arg is CommandResponse {
-  return typeof (arg as CommandResponse).seq !== 'undefined';
+//
+// Ctl
+//
+
+interface Ctl {
+  close: () => Promise<void>;
+  status: () => WsState;
+  run: <R extends any = void>(script: Script<R>) => Promise<R>;
 }
 
-export interface CommandLogonResponse extends CommandResponse {
-  refresh_token: string;
+type ServerAddress = string;
+
+function isServerAddress(arg: any): arg is ServerAddress {
+  return arg != null && typeof arg === 'string';
 }
 
-export interface CommandSendTextMessageResponse extends CommandResponse {}
-
-export interface CommandMap {
-  [CommandNames.LOGON]: [CommandLogonRequest, CommandLogonResponse];
-  [CommandNames.SEND_TEXT_MESSAGE]: [CommandSendTextMessageRequest, CommandSendTextMessageResponse];
+function isPromise(arg: any): arg is Promise<any> {
+  return !!arg && typeof arg.then === 'function';
 }
 
-/* Events */
+type OpusInfo = {
+  channels: number;
+  inputSampleRate: number;
+  framesPerPacket: number;
+  frameSize: number;
+};
 
-export enum EventNames {
-  CHANNEL_STATUS = 'on_channel_status',
-  TEXT_MESSAGE = 'on_text_message',
-  STREAM_START = 'on_stream_start',
-  ERROR = 'on_error',
-}
+type SamplingRate = 8000 | 12000 | 16000 | 24000 | 48000;
+type FrameSize = 2.5 | 5 | 10 | 20 | 40 | 60;
+type Channels = 1 | 2;
 
-export const eventNames = [
-  EventNames.CHANNEL_STATUS,
-  EventNames.STREAM_START,
-  EventNames.TEXT_MESSAGE,
-  EventNames.ERROR,
-] as const;
+type FFmpegArgs = string[];
 
-export interface EventBase {
-  command: EventNames;
-}
+type DeferredPromise<T> = {
+  resolve: (arg: T) => void;
+  reject?: any;
+};
 
-export interface EventChannelStatus extends EventBase {
-  command: EventNames.CHANNEL_STATUS;
-  channel: string;
-  status: string;
-  users_online: number;
-  images_supported: boolean;
-  texting_supported: boolean;
-  locations_supported: boolean;
-  error: string;
-  error_type: string;
-}
-
-export interface EventTextMessage extends EventBase {
-  command: EventNames.TEXT_MESSAGE;
-  channel: string;
-  from: string;
-  for: boolean | string;
-  message_id: number;
-  text: string;
-}
-
-export interface EventError extends EventBase {
-  error: string;
-}
-
-export enum StreamTypes {
-  AUDIO = 'audio',
-}
-export enum Codecs {
-  OPUS = 'opus',
-}
-
-export interface EventStreamStart extends EventBase {
-  command: EventNames.STREAM_START;
-  type: StreamTypes;
-  codec: Codecs;
-  codec_header: string;
-  packet_duration: number;
-  stream_id: number;
-  channel: string;
-  from: string;
-  for: string;
-}
-
-export function isEvent(arg: any): arg is EventBase {
-  return typeof (arg as EventBase).command !== 'undefined';
-}
-
-export interface EventMap {
-  [EventNames.CHANNEL_STATUS]: EventChannelStatus;
-  [EventNames.STREAM_START]: EventStreamStart;
-  [EventNames.TEXT_MESSAGE]: EventTextMessage;
-  [EventNames.ERROR]: EventError;
-}
-// type Events = EventMap[keyof EventMap];
-
-const wsStates = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'] as const;
-export type WsState = typeof wsStates[number];
-
-export const webSocketStateNames: { [key: number]: WsState } = {
-  [WebSocket.CONNECTING]: 'CONNECTING',
-  [WebSocket.OPEN]: 'OPEN',
-  [WebSocket.CLOSING]: 'CLOSING',
-  [WebSocket.CLOSED]: 'CLOSED',
+export {
+  Events,
+  Commands,
+  Awaits,
+  CommandCode,
+  CommandMap,
+  isCommandSendData,
+  EventCallbacks,
+  EventNameToCode,
+  EventName,
+  EventCode,
+  Event,
+  Await,
+  EventMap,
+  Command,
+  Macro,
+  Script,
+  Options,
+  Ctl,
+  isServerAddress,
+  isScript,
+  isScriptGenerator,
+  isOptions,
+  isPromise,
+  Zello,
+  ZelloMacro,
+  StreamGetter,
+  OpusInfo,
+  DeferredPromise,
+  SamplingRate,
+  FFmpegArgs,
+  FrameSize,
+  Channels,
+  StreamGetterOptions,
 };
