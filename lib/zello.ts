@@ -61,7 +61,7 @@ async function zello<R>(
   const name = counter > 0 ? options.name + '-' + counter : options.name;
   botCounters.set(options.name, counter + 1);
 
-  pinoLogger.info(`Assigning name "${name}" to the bot`);
+  pinoLogger.debug(`Assigning name "${name}" to the bot`);
 
   const logger = pinoLogger.child({ bot: name });
   let closeRequested = false;
@@ -212,7 +212,7 @@ async function zello<R>(
   }
 
   async function executeScript<R>(script: Types.Script<R>, props: Types.Zello): Promise<R> {
-    logger.info('Executing user script');
+    logger.debug('Executing user script');
     const gen = script(props);
     // Check to see if our script is Generator or Promise
     if (Types.isScriptGenerator(gen)) {

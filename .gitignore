@@ -1,5 +1,6 @@
 /.idea/
 /node_modules/
+/dev/
 /dist/
 .env
 .env.local

@@ -30,7 +30,6 @@ type SendAudio = (inputStream: Readable, options?: Options) => Promise<any>;
 
 const sendAudio: Macro<SendAudio> = function ({ commands, logger }) {
   return async function (inputStream, options) {
-    logger.info('Running macro: "sendAudio"');
     const retry: RetryStrategy = {
       ...DEFAULT_RETRY_STRATEGY,
       ...(options != null && options.retry),
@@ -51,7 +50,7 @@ const sendAudio: Macro<SendAudio> = function ({ commands, logger }) {
     };
     // Getting button
     while (true) {
-      logger.info('Requesting the mic...');
+      logger.info('Requesting the button');
       try {
         resp = await commands.startStream({
           type: Api.StreamTypes.AUDIO,
@@ -91,7 +90,7 @@ const sendAudio: Macro<SendAudio> = function ({ commands, logger }) {
       // Successfully got the button
       break;
     }
-    logger.info('Got the button, ');
+    logger.info('Got the button!');
     logger.debug(`stream_id: ${resp.stream_id}`);
     const { stream: outStream } = await commands.sendData({
       streamId: resp.stream_id,

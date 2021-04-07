@@ -11,7 +11,7 @@ type Login = (cred: Omit<Api.CommandLogonRequest, 'command'>, timeout?: number) 
 
 const login: Macro<Login> = function ({ commands, logger, awaits }) {
   return async function (cred, timeout = DEFAULT_LOGIN_TIMEOUT) {
-    logger.info('Logging in...');
+    logger.debug('Logging in...');
     if (!checkCredentials(cred)) {
       throw new Error('Check credentials');
     }
