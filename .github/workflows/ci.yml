@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: 'https://registry.npmjs.org'
+      - name: Installing prerequisites
+        run: sudo apt-get install --no-install-recommends --yes libasound2-dev
       - name: Installing dependencies
         run: npm ci
       - name: Running ESlint
