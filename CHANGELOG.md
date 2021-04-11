@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.4](https://github.com/OnkelTem/ts-zello/compare/v0.0.3...v0.0.4) (2021-04-11)
+
+
+### Bug Fixes
+
+* **dev:** added commitlint, updated husky hooks, minor library changes ([6572f2c](https://github.com/OnkelTem/ts-zello/commit/6572f2cf7b33f34b537289f2e629d2334ff5f501))
+
 ### [0.0.3](https://github.com/OnkelTem/ts-zello/compare/v0.0.2...v0.0.3) (2021-04-10)
 
 
