@@ -1,5 +1,4 @@
 import prism from 'prism-media';
-import pEvent from 'p-event';
 import { Duplex, PassThrough, Readable } from 'stream';
 import { Logger } from 'pino';
 import { Channels, FFmpegArgs, FrameSize, OpusInfo, SamplingRate, StreamGetter, StreamGetterOptions } from './types';
@@ -206,23 +205,20 @@ export function initAudioStream(
   };
 }
 
-type AudioFileStreamCtl = {
-  stream: Readable;
-  close: () => Promise<unknown>;
-};
-
-export function getAudioFileStreamCtl(
-  path: string,
-  parentLogger: Logger,
-  options?: FileStreamOptions,
-): AudioFileStreamCtl {
-  const logger = parentLogger.child({ facility: 'getFileStream' });
+export function getAudioFileStream(path: string, parentLogger: Logger, options?: FileStreamOptions): Readable {
+  const logger = parentLogger.child({ facility: 'getAudioFileStream' });
 
   const rs = fs.createReadStream(path);
   rs.on('error', (err) => {
     logger.error(err, 'Read stream error');
     throw err;
   });
+  return getAutoDecodeStream(rs, logger, options);
+}
+
+export function getAutoDecodeStream(stream: Readable, parentLogger: Logger, options?: FileStreamOptions): Duplex {
+  const logger = parentLogger.child({ facility: 'getAutoDecodeStream' });
+
   const { samplingRate, volumeFactor, ffmpegArgs }: Required<FileStreamOptions> =
     options != null ? { ...FILE_STREAM_DEFAULT_OPTIONS, ...options } : FILE_STREAM_DEFAULT_OPTIONS;
 
@@ -249,11 +245,5 @@ export function getAudioFileStreamCtl(
     logger.error(err, 'Transcoder stream error');
     throw err;
   });
-  return {
-    stream: rs.pipe(transcodeStream),
-    close: async () => {
-      rs.destroy();
-      await pEvent(rs, 'close');
-    },
-  };
+  return stream.pipe(transcodeStream);
 }

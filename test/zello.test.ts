@@ -4,7 +4,7 @@ import fs from 'fs';
 import prism from 'prism-media';
 import pEvent from 'p-event';
 import delay from 'delay';
-import { getAudioFileStreamCtl } from '../lib';
+import { getAudioFileStream } from '../lib';
 import Speaker from 'speaker';
 import tmp from 'tmp';
 
@@ -157,10 +157,10 @@ test('should send mp3 file to a channel and get "on_start_stream" event with ano
   await z1.macros.login(cred1);
   await z2.macros.login(cred2);
   await delay(2000);
-  const streamCtl = getAudioFileStreamCtl(path, z1.logger);
+  const stream = getAudioFileStream(path, z1.logger);
   const [res] = await Promise.all([
     z2.awaits.onStreamStart((event) => event.from === cred1.username, 5000),
-    z1.macros.sendAudio(streamCtl.stream),
+    z1.macros.sendAudio(stream),
   ]);
   await delay(2000);
   expect(!!res).toBe(true);
@@ -174,7 +174,7 @@ test('should send mp3 file to a channel and receive it with another bot', async 
   const z2 = await zello(ZELLO_SERVER, { name: 'receiver' });
   await z1.macros.login(cred1);
   await z2.macros.login(cred2);
-  const streamCtl = getAudioFileStreamCtl(path, z1.logger);
+  const stream = getAudioFileStream(path, z1.logger);
   const [res] = await Promise.all([
     z2.awaits
       .onAudioData(({ event }) => event.from === cred1.username, 5)
@@ -189,7 +189,7 @@ test('should send mp3 file to a channel and receive it with another bot', async 
         await pEvent(stream, 'finish');
         return 1;
       }),
-    z1.macros.sendAudio(streamCtl.stream, { transcode: { bitrateKbps: 32 } }),
+    z1.macros.sendAudio(stream, { transcode: { bitrateKbps: 32 } }),
   ]);
   expect(!!res).toBe(true);
   await z1.ctl.close();
@@ -204,7 +204,7 @@ test('should send mp3 file to a channel save it with another bot', async () => {
   await z2.macros.login(cred2);
   let size: number = 0;
   let outFileName: string | null = null;
-  const streamCtl = getAudioFileStreamCtl(path, z1.logger);
+  const stream = getAudioFileStream(path, z1.logger);
   const [res] = await Promise.all([
     z2.awaits
       .onAudioData(({ event }) => event.from === cred1.username, 5)
@@ -224,7 +224,7 @@ test('should send mp3 file to a channel save it with another bot', async () => {
         }
         return 1;
       }),
-    z1.macros.sendAudio(streamCtl.stream, {}),
+    z1.macros.sendAudio(stream, {}),
   ]);
   expect(!!res).toBe(true);
   expect(size).toBeGreaterThan(0);

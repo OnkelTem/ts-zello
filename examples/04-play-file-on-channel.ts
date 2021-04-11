@@ -2,7 +2,7 @@ import { existsSync } from 'fs';
 import pino from 'pino';
 
 import { cred1 } from './utils';
-import zello, { DEFAULT_ZELLO_OPTIONS, Zello, getAudioFileStreamCtl } from '../lib';
+import zello, { DEFAULT_ZELLO_OPTIONS, Zello, getAudioFileStream } from '../lib';
 
 const pinoLogger = pino(DEFAULT_ZELLO_OPTIONS.logger);
 
@@ -21,7 +21,7 @@ if (!existsSync(filename)) {
 
 const samplingRate = 16000;
 const frameSize = 60;
-const stream = getAudioFileStreamCtl(filename, pinoLogger, {
+const stream = getAudioFileStream(filename, pinoLogger, {
   samplingRate,
   volumeFactor: 0.3,
 });
@@ -31,7 +31,7 @@ async function main() {
   try {
     await z.ctl.run(function* ({ macros }) {
       yield macros.login(cred1);
-      yield macros.sendAudio(stream.stream, {
+      yield macros.sendAudio(stream, {
         transcode: { samplingRate, frameSize, bitrateKbps: 32, channels: 1 },
       });
     });
@@ -43,7 +43,7 @@ async function main() {
 async function shutdown() {
   if (z && z.ctl.status() === 'OPEN') {
     console.warn('Closing...');
-    await stream.close();
+    await stream.destroy();
     await z.ctl.close();
   }
 }
