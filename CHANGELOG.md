@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.5](https://github.com/OnkelTem/ts-zello/compare/v0.0.4...v0.0.5) (2021-04-18)
+
+
+### Features
+
+* **ffmpeg:** added tempo and playback timecode selection ([bc77dd5](https://github.com/OnkelTem/ts-zello/commit/bc77dd57a1bc4dc88217a8b1eab3628a9897141b))
+
 ### [0.0.4](https://github.com/OnkelTem/ts-zello/compare/v0.0.3...v0.0.4) (2021-04-11)
 
 
