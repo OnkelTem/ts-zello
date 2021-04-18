@@ -87,9 +87,28 @@ export async function getOpusReader(
   };
 }
 
+// http://ffmpeg.org/ffmpeg-utils.html#Time-duration
+export type FFmpegDuration = string;
+
+const reFFmpegDuration = /^((\d{2}:)?\d{2}:\d{2}(\.\d+)?|\d+(\.\d+)?(s|ms|us)?)$/gm;
+
+function isFFmpegDuration(arg: string): arg is FFmpegDuration {
+  // Either [-][HH:]MM:SS[.m...] or [-]S+[.m...][s|ms|us]
+  return !!arg.match(reFFmpegDuration);
+}
+
+export type FFmpegTempo = number;
+
+function isFFmpegTempo(arg: number): arg is FFmpegTempo {
+  return arg >= 0.5 && arg <= 2.0;
+}
+
 export type FileStreamOptions = {
   samplingRate?: SamplingRate;
   volumeFactor?: number;
+  tempoFactor?: FFmpegTempo;
+  startAt?: FFmpegDuration | null;
+  endAt?: FFmpegDuration | null;
   ffmpegArgs?: FFmpegArgs;
 };
 
@@ -97,6 +116,9 @@ const FILE_STREAM_DEFAULT_FFMPEG_ARGS: FFmpegArgs = ['-channel_layout', 'mono'];
 const FILE_STREAM_DEFAULT_OPTIONS: Required<FileStreamOptions> = {
   samplingRate: 48000,
   volumeFactor: 0.5,
+  tempoFactor: 1,
+  startAt: null,
+  endAt: null,
   ffmpegArgs: FILE_STREAM_DEFAULT_FFMPEG_ARGS,
 };
 
@@ -219,8 +241,33 @@ export function getAudioFileStream(path: string, parentLogger: Logger, options?:
 export function getAutoDecodeStream(stream: Readable, parentLogger: Logger, options?: FileStreamOptions): Duplex {
   const logger = parentLogger.child({ facility: 'getAutoDecodeStream' });
 
-  const { samplingRate, volumeFactor, ffmpegArgs }: Required<FileStreamOptions> =
+  const { samplingRate, volumeFactor, tempoFactor, startAt, endAt, ffmpegArgs }: Required<FileStreamOptions> =
     options != null ? { ...FILE_STREAM_DEFAULT_OPTIONS, ...options } : FILE_STREAM_DEFAULT_OPTIONS;
+
+  // From ... to ...
+  let startAtArg: [string, string] | [] = [];
+  let endAtArg: [string, string] | [] = [];
+  if (startAt != null) {
+    if (isFFmpegDuration(startAt)) {
+      startAtArg = ['-ss', startAt];
+    } else {
+      logger.warn(`Wrong startAt format: ${startAt}`);
+    }
+  }
+  if (endAt != null) {
+    if (isFFmpegDuration(endAt)) {
+      endAtArg = ['-t', endAt];
+    } else {
+      logger.warn(`Wrong endAt format: ${endAt}`);
+    }
+  }
+
+  const filters: string[] = [];
+  filters.push(`aresample=${samplingRate}`);
+  filters.push(`volume=${volumeFactor}`);
+  if (tempoFactor !== 1 && isFFmpegTempo(tempoFactor)) {
+    filters.push(`atempo=${tempoFactor}`);
+  }
 
   // Create transcoder stream
   const transcoderArguments = [
@@ -230,10 +277,12 @@ export function getAutoDecodeStream(stream: Readable, parentLogger: Logger, opti
     '0',
     '-i',
     '-',
+    ...startAtArg,
+    ...endAtArg,
     '-f',
     's16le',
     '-filter:a',
-    `aresample=${samplingRate},volume=${volumeFactor}`,
+    filters.join(','),
     ...ffmpegArgs,
   ];
   const transcodeStream = new prism.FFmpeg({

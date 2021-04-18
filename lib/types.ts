@@ -174,8 +174,10 @@ type OpusInfo = {
   frameSize: number;
 };
 
-type SamplingRate = 8000 | 12000 | 16000 | 24000 | 48000;
-type FrameSize = 2.5 | 5 | 10 | 20 | 40 | 60;
+const samplingRates = [8000, 12000, 16000, 24000, 48000] as const;
+type SamplingRate = typeof samplingRates[number];
+const frameSizes = [2.5, 5, 10, 20, 40, 60] as const;
+type FrameSize = typeof frameSizes[number];
 type Channels = 1 | 2;
 
 type FFmpegArgs = string[];
@@ -214,8 +216,10 @@ export {
   StreamGetter,
   OpusInfo,
   DeferredPromise,
+  samplingRates,
   SamplingRate,
   FFmpegArgs,
+  frameSizes,
   FrameSize,
   Channels,
   StreamGetterOptions,
