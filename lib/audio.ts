@@ -3,7 +3,6 @@ import { Duplex, PassThrough, Readable } from 'stream';
 import { Logger } from 'pino';
 import { Channels, FFmpegArgs, FrameSize, OpusInfo, SamplingRate, StreamGetter, StreamGetterOptions } from './types';
 import * as Api from './api';
-import fs from 'fs';
 import { StabilizeStream, StabilizeStreamOptions } from './utils';
 
 // prettier-ignore
@@ -39,11 +38,7 @@ const DEFAULT_OPTIONS: Required<OpusOptions> = {
   frameSize: 20,
 };
 
-export async function getOpusReader(
-  inputStream: Readable,
-  parentLogger: Logger,
-  options?: OpusOptions | null,
-): Promise<OpusReader> {
+export async function getOpusReader(parentLogger: Logger, options?: OpusOptions | null): Promise<OpusReader> {
   const logger = parentLogger.child({ facility: 'getOpusReader' });
   logger.debug('Setting up OPUS reader');
 
@@ -69,21 +64,16 @@ export async function getOpusReader(
   }
 
   const opusInfo: OpusInfo = {
-    channels: channels,
+    channels,
     inputSampleRate: samplingRate,
-
     framesPerPacket: 1,
-    frameSize: frameSize,
+    frameSize,
   };
   logger.debug(opusInfo, 'OPUS info');
 
-  // Starting the stream to read out the metadata
-  logger.debug('Piping input stream to the encoder');
-  const opusStream = inputStream.pipe(encodeStream);
-
   return {
     opusInfo,
-    opusStream,
+    opusStream: encodeStream,
   };
 }
 
@@ -227,18 +217,7 @@ export function initAudioStream(
   };
 }
 
-export function getAudioFileStream(path: string, parentLogger: Logger, options?: FileStreamOptions): Readable {
-  const logger = parentLogger.child({ facility: 'getAudioFileStream' });
-
-  const rs = fs.createReadStream(path);
-  rs.on('error', (err) => {
-    logger.error(err, 'Read stream error');
-    throw err;
-  });
-  return getAutoDecodeStream(rs, logger, options);
-}
-
-export function getAutoDecodeStream(stream: Readable, parentLogger: Logger, options?: FileStreamOptions): Duplex {
+export function getAutoDecodeStream(parentLogger: Logger, options?: FileStreamOptions): Duplex {
   const logger = parentLogger.child({ facility: 'getAutoDecodeStream' });
 
   const { samplingRate, volumeFactor, tempoFactor, startAt, endAt, ffmpegArgs }: Required<FileStreamOptions> =
@@ -294,5 +273,5 @@ export function getAutoDecodeStream(stream: Readable, parentLogger: Logger, opti
     logger.error(err, 'Transcoder stream error');
     throw err;
   });
-  return stream.pipe(transcodeStream);
+  return transcodeStream;
 }

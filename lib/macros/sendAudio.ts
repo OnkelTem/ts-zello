@@ -6,7 +6,7 @@ import delay from 'delay';
 // Project
 import { getOpusReader, OpusReader, OpusOptions } from '../audio';
 import * as Api from '../api';
-import { encodeCodecHeader } from '../utils';
+import { DataWaitPassThroughStream, encodeCodecHeader } from '../utils';
 import { Macro } from '../types';
 
 type RetryStrategy = {
@@ -35,28 +35,36 @@ const sendAudio: Macro<SendAudio> = function ({ commands, logger }) {
       ...(options != null && options.retry),
     };
     const transcode = options != null ? options.transcode : null;
-    let resp: Api.CommandStartStreamResponse;
     let opusReader: OpusReader;
     try {
-      opusReader = await getOpusReader(inputStream, logger, transcode);
+      opusReader = await getOpusReader(logger, transcode);
     } catch (err) {
       // Couldn't create OpusReader
       logger.error(err, 'Error creating OPUS reader');
       throw new Error(err);
     }
+    const { opusInfo, opusStream } = opusReader;
     const retryCounters = {
       attempt: 1,
       startAtMs: new Date().getTime(),
     };
-    // Getting button
+
+    // Ensure we have our data ready for streaming
+    logger.debug('Making sure the data is ready...');
+    const readyInputStream = inputStream.pipe(new DataWaitPassThroughStream());
+    await pEvent(readyInputStream, 'dataIsReady');
+    logger.debug('Data is ready.');
+
+    // Getting the button
+    let resp: Api.CommandStartStreamResponse;
     while (true) {
       logger.info('Requesting the button');
       try {
         resp = await commands.startStream({
           type: Api.StreamTypes.AUDIO,
           codec: Api.Codecs.OPUS,
-          codec_header: encodeCodecHeader(opusReader.opusInfo),
-          packet_duration: opusReader.opusInfo.frameSize,
+          codec_header: encodeCodecHeader(opusInfo),
+          packet_duration: opusInfo.frameSize,
         });
       } catch (err) {
         throw new Error(err);
@@ -92,20 +100,19 @@ const sendAudio: Macro<SendAudio> = function ({ commands, logger }) {
     }
     logger.info('Got the button!');
     logger.debug(`stream_id: ${resp.stream_id}`);
-    const { stream: outStream } = await commands.sendData({
+    const { stream: outStream } = await commands.sendAudioData({
       streamId: resp.stream_id,
-      frameSize: opusReader.opusInfo.frameSize,
+      frameSize: opusInfo.frameSize,
     });
     // TODO: Fix the problem with rising exception when stream gets destroyed
     //       https://dev.to/morz/pipeline-api-the-best-way-to-handle-stream-errors-that-nobody-tells-you-about-122o
     logger.info('Start streaming...');
     try {
-      opusReader.opusStream.pipe(outStream);
+      readyInputStream.pipe(opusStream).pipe(outStream);
       await pEvent(outStream, 'finish');
       // Closing stream
     } catch (err) {
-      console.log(err);
-      debugger;
+      logger.error(err, 'ERROR');
     }
     await commands.stopStream({
       streamId: resp.stream_id,

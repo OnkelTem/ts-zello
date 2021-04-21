@@ -2,12 +2,19 @@
 // API Events
 //
 
-import { Codecs, StreamTypes } from './common';
+import { Codecs, ImageSource, ImageType, StreamTypes } from './common';
 
-const eventNames = ['onChannelStatus', 'onTextMessage', 'onStreamStart', 'onStreamStop', 'onError'] as const;
-const eventCodes = ['on_channel_status', 'on_text_message', 'on_stream_start', 'on_stream_stop', 'on_error'] as const;
+const eventNames = ['onChannelStatus', 'onTextMessage', 'onStreamStart', 'onStreamStop', 'onImage', 'onError'] as const;
+const eventCodes = [
+  'on_channel_status',
+  'on_text_message',
+  'on_stream_start',
+  'on_stream_stop',
+  'on_image',
+  'on_error',
+] as const;
 
-type EventList = [EventChannelStatus, EventTextMessage, EventStreamStart, EventStreamStop, EventError];
+type EventList = [EventChannelStatus, EventTextMessage, EventStreamStart, EventStreamStop, EventImage, EventError];
 
 type EventCode = typeof eventCodes[number];
 
@@ -53,6 +60,18 @@ interface EventStreamStop extends EventBase {
   stream_id: number;
 }
 
+interface EventImage extends EventBase {
+  command: 'on_image';
+  channel: string;
+  from: string;
+  for: boolean | string;
+  message_id: number;
+  type: ImageType;
+  source: ImageSource;
+  width: number;
+  height: number;
+}
+
 interface EventError extends EventBase {
   error: string;
 }
@@ -83,6 +102,7 @@ export {
   EventChannelStatus,
   EventStreamStart,
   EventTextMessage,
+  EventImage,
   EventError,
   EventList,
   isEvent,

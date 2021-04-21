@@ -7,6 +7,7 @@ import { EventEmitter } from 'events';
 // Project
 import './config';
 import * as Api from './api';
+import { ImagePacketTypes } from './api';
 import * as Types from './types';
 import { getMacros } from './macros';
 import { webSocketStateNames } from './ws';
@@ -102,14 +103,20 @@ async function zello<R>(
       commandPromises.set(seqCurrent, { command: commandCode, promise: { resolve, reject } });
     });
     if (ws.readyState === WebSocket.OPEN) {
-      if (Types.isCommandSendData(request, commandCode)) {
-        // Special case for sendData command: create and return getDataStream
+      if (Types.isCommandSendAudioData(request, commandCode)) {
+        // Special case for sendAudioData command: create and return getDataStream
         // This promise resolves when send stream is created
         const commandPromise = commandPromises.get(seqCurrent)!;
         commandPromises.delete(seqCurrent);
-        const streamInfo = setupDataStream(request);
-
+        const streamInfo = setupAudioDataStream(request);
         commandPromise.promise.resolve(streamInfo);
+      } else if (Types.isCommandSendImageData(request, commandCode)) {
+        // Special case for sendImageData command: create and return getDataStream
+        // This promise resolves when send stream is created
+        const commandPromise = commandPromises.get(seqCurrent)!;
+        commandPromises.delete(seqCurrent);
+        const sendImageFunction = sendImage(request);
+        commandPromise.promise.resolve(sendImageFunction);
       } else {
         // Sending command via websocket
         //const startTime = getTime();
@@ -144,52 +151,76 @@ async function zello<R>(
     return promise;
   }
 
+  async function sendBinaryPacket(packet: Buffer) {
+    return new Promise((resolve, reject) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(packet, { binary: true }, function (err) {
+          if (err) {
+            logger.warn(`Cannot send packet`);
+            reject(err);
+          } else {
+            resolve(true);
+          }
+        });
+      } else {
+        reject(new Error('Socket is not open, cannot send image data'));
+      }
+    });
+  }
+
+  function sendImage(request: Types.CommandMap['send_image_data'][0]): Types.CommandMap['send_image_data'][1] {
+    const { imageId, fullSizeData, thumbnailData } = request;
+    const fullSizePacket = packPacket({
+      data: fullSizeData,
+      type: Api.PacketTypes.IMAGE,
+      imageId,
+      packetType: ImagePacketTypes.FULL_SIZE,
+    });
+    const thumbnailPacket = packPacket({
+      data: thumbnailData,
+      type: Api.PacketTypes.IMAGE,
+      imageId,
+      packetType: ImagePacketTypes.THUMBNAIL,
+    });
+    return async function () {
+      await sendBinaryPacket(thumbnailPacket);
+      await sendBinaryPacket(fullSizePacket);
+    };
+  }
+
   let outgoingDataStream: Writable | null = null;
 
-  function setupDataStream(request: Types.CommandMap['send_data'][0]): Types.CommandMap['send_data'][1] {
+  function setupAudioDataStream(
+    request: Types.CommandMap['send_audio_data'][0],
+  ): Types.CommandMap['send_audio_data'][1] {
     let packetId = 0;
     let lastTime: bigint;
     // Create a writable stream
     outgoingDataStream = new Writable({
-      write: async function (packet: Buffer | undefined, encoding, callback) {
-        if (packet) {
+      write: async function (chunk: Buffer | undefined, encoding, callback) {
+        if (chunk) {
           logger.trace(`Received packet: ${packetId}`);
-          const zelloPacket = packPacket({
-            data: packet,
+          const packet = packPacket({
+            data: chunk,
             type: Api.PacketTypes.AUDIO,
             streamId: request.streamId,
             packetId: packetId++,
           });
-          if (zelloPacket != null) {
-            if (lastTime != null) {
-              // The timer has been started when sending previous packet.
-              // Measure in milliseconds the time passed since then.
-              const diff = Math.ceil(Number(getTime() - lastTime) / 1000000);
-              // Delay the rest milliseconds
-              logger.trace(`Will send packet ${packetId} after: ${request.frameSize - diff} ms `);
-              await delay(request.frameSize - diff);
-            }
-            try {
-              await new Promise((resolve, reject) => {
-                if (ws.readyState === WebSocket.OPEN) {
-                  ws.send(zelloPacket, { binary: true }, function (err) {
-                    if (err) {
-                      logger.warn(`Cannot send packet: ${packetId}`);
-                      reject(err);
-                    } else {
-                      resolve(true);
-                    }
-                  });
-                } else {
-                  reject(new Error('Socket is not open, cannot send data'));
-                }
-              });
-            } catch (err) {
-              callback(err);
-              return;
-            }
-            lastTime = getTime();
+          if (lastTime != null) {
+            // The timer has been started when sending previous packet.
+            // Measure in milliseconds the time passed since then.
+            const diff = Math.ceil(Number(getTime() - lastTime) / 1000000);
+            // Delay the rest milliseconds
+            logger.trace(`Will send packet ${packetId} after: ${request.frameSize - diff} ms `);
+            await delay(request.frameSize - diff);
           }
+          try {
+            await sendBinaryPacket(packet);
+          } catch (err) {
+            callback(err);
+            return;
+          }
+          lastTime = getTime();
           callback();
           return;
         }
@@ -201,7 +232,7 @@ async function zello<R>(
     };
   }
 
-  function stopDataStream() {
+  function stopAudioDataStream() {
     if (outgoingDataStream != null) {
       logger.info('Stopping outgoing stream');
       outgoingDataStream.destroy();
@@ -330,8 +361,10 @@ async function zello<R>(
     onTextMessage: setEventHandler('on_text_message'),
     onStreamStart: setEventHandler('on_stream_start'),
     onStreamStop: setEventHandler('on_stream_stop'),
-    onError: setEventHandler('on_error'),
     onAudioData: setEventHandler('on_audio_data'),
+    onImage: setEventHandler('on_image'),
+    onImageData: setEventHandler('on_image_data'),
+    onError: setEventHandler('on_error'),
   };
 
   const awaits: Types.Awaits = {
@@ -339,8 +372,10 @@ async function zello<R>(
     onTextMessage: setAwaitHandler('onTextMessage'),
     onStreamStart: setAwaitHandler('onStreamStart'),
     onStreamStop: setAwaitHandler('onStreamStop'),
-    onError: setAwaitHandler('onError'),
     onAudioData: setAwaitHandler('onAudioData'),
+    onImage: setAwaitHandler('onImage'),
+    onImageData: setAwaitHandler('onImageData'),
+    onError: setAwaitHandler('onError'),
   };
 
   const commands: Types.Commands = {
@@ -348,7 +383,9 @@ async function zello<R>(
     sendTextMessage: setCommandHandler('send_text_message'),
     startStream: setCommandHandler('start_stream'),
     stopStream: setCommandHandler('stop_stream'),
-    sendData: setCommandHandler('send_data'),
+    sendAudioData: setCommandHandler('send_audio_data'),
+    sendImage: setCommandHandler('send_image'),
+    sendImageData: setCommandHandler('send_image_data'),
   };
 
   try {
@@ -450,7 +487,7 @@ async function zello<R>(
                 // Stop outgoing stream if any
                 if (outgoingDataStream != null) {
                   logger.info('Received on_stream_stop while transmitting data');
-                  stopDataStream();
+                  stopAudioDataStream();
                 }
                 const callback = callbacks['on_audio_data'];
                 if (callback != null) {
@@ -490,7 +527,7 @@ async function zello<R>(
                   // this type during a transmission.
                   if (outgoingDataStream != null) {
                     logger.debug('Received audio data while transmitting audio');
-                    stopDataStream();
+                    stopAudioDataStream();
                   }
                 }
               } else if (Api.isPacketImage(packet)) {
@@ -519,7 +556,7 @@ async function zello<R>(
         closeRequested = true;
         // Destroy outgoing stream if any
         if (outgoingDataStream != null) {
-          stopDataStream();
+          stopAudioDataStream();
         }
         // Close all incoming streams
         for (const key of expectedAudioStreams.keys()) {

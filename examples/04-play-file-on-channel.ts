@@ -1,8 +1,7 @@
-import { existsSync } from 'fs';
+import fs from 'fs';
 import pino from 'pino';
-
 import { cred1 } from './utils';
-import zello, { DEFAULT_ZELLO_OPTIONS, Zello, getAudioFileStream } from '../lib';
+import zello, { DEFAULT_ZELLO_OPTIONS, Zello, getAutoDecodeStream } from '../lib';
 
 const pinoLogger = pino(DEFAULT_ZELLO_OPTIONS.logger);
 
@@ -14,17 +13,19 @@ if (process.argv.length < 3) {
 }
 const filename = process.argv[2];
 
-if (!existsSync(filename)) {
+if (!fs.existsSync(filename)) {
   console.error(`File not found: "${filename}"`);
   process.exit(2);
 }
 
 const samplingRate = 16000;
 const frameSize = 60;
-const stream = getAudioFileStream(filename, pinoLogger, {
-  samplingRate,
-  volumeFactor: 0.3,
-});
+const stream = fs.createReadStream(filename).pipe(
+  getAutoDecodeStream(pinoLogger, {
+    samplingRate,
+    volumeFactor: 0.3,
+  }),
+);
 
 async function main() {
   z = await zello({ logger: pinoLogger });
@@ -38,6 +39,7 @@ async function main() {
   } catch (err) {
     console.log(err);
   }
+  await shutdown();
 }
 
 async function shutdown() {

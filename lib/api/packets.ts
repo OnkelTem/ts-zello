@@ -4,6 +4,11 @@ enum PacketTypes {
   IMAGE = 2,
 }
 
+enum ImagePacketTypes {
+  FULL_SIZE = 1,
+  THUMBNAIL = 2,
+}
+
 interface PacketBase {
   type: PacketTypes;
   data: Buffer;
@@ -17,7 +22,8 @@ interface PacketAudio extends PacketBase {
 
 interface PacketImage extends PacketBase {
   type: PacketTypes.IMAGE;
-  messageId: number;
+  packetType: ImagePacketTypes;
+  imageId: number;
 }
 
 interface PacketUnknown extends PacketBase {
@@ -34,4 +40,4 @@ function isPacketImage(arg: Packet): arg is PacketImage {
   return arg.type === PacketTypes.IMAGE;
 }
 
-export { Packet, isPacketAudio, isPacketImage, PacketTypes, PacketAudio };
+export { Packet, isPacketAudio, isPacketImage, PacketTypes, PacketAudio, ImagePacketTypes };

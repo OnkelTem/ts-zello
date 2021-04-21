@@ -5,7 +5,7 @@ import { Readable, Writable } from 'stream';
 import '../lib/config';
 import * as utils from '../lib/utils';
 import * as Api from '../lib/api';
-import { DEFAULT_LOGGER_OPTIONS } from '../lib/logger';
+import { DEFAULT_LOGGER_OPTIONS } from '../lib';
 
 test('test packet pack', () => {
   const buf = Buffer.from(new Uint8Array([1, 2, 3]));
@@ -71,7 +71,7 @@ test('test cancellable delay', async () => {
   expect(res).toBe('foo');
 });
 
-test('test DistillStream with packets << readableHighWaterMark', () => {
+test('test StabilizeStream with packets << readableHighWaterMark', () => {
   const logger = pino(DEFAULT_LOGGER_OPTIONS);
   const rs = new Readable({ read() {} });
   const ds = new utils.StabilizeStream({ bufferSize: 10, logger });

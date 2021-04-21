@@ -11,8 +11,8 @@ import { getMacros } from './macros';
 
 // Add custom events
 
-const customEventCodes = ['on_audio_data'] as const;
-const customEventNames = ['onAudioData'] as const;
+const customEventCodes = ['on_audio_data', 'on_image_data'] as const;
+const customEventNames = ['onAudioData', 'onImageData'] as const;
 
 type StreamGetterOptions = {
   pcm:
@@ -24,12 +24,18 @@ type StreamGetterOptions = {
 };
 
 type StreamGetter = (options?: StreamGetterOptions) => Readable;
+
 interface CustomEventAudioData {
   event: Api.EventStreamStart;
   opusInfo: OpusInfo;
   getStream: StreamGetter;
 }
-type CustomEventList = [CustomEventAudioData];
+
+interface CustomEventImageData {
+  event: Api.EventImage;
+}
+
+type CustomEventList = [CustomEventAudioData, CustomEventImageData];
 
 type EventCodes = [...typeof Api.eventCodes, ...typeof customEventCodes];
 type EventCode = EventCodes[number];
@@ -55,16 +61,30 @@ type Events = {
 
 // Add custom commands
 
-const customCommandCodes = ['send_data'] as const;
-const customCommandNames = ['sendData'] as const;
-interface CustomCommandSendDataRequest {
+const customCommandCodes = ['send_audio_data', 'send_image_data'] as const;
+const customCommandNames = ['sendAudioData', 'sendImageData'] as const;
+
+interface CustomCommandSendAudioDataRequest {
   streamId: number;
   frameSize: number;
 }
-interface CustomCommandSendDataResponse {
+interface CustomCommandSendAudioDataResponse {
   stream: Writable;
 }
-type CustomCommandList = [[CustomCommandSendDataRequest, CustomCommandSendDataResponse]];
+
+interface CustomCommandSendImageDataRequest {
+  imageId: number;
+  fullSizeData: Buffer;
+  thumbnailData: Buffer;
+}
+interface CustomCommandSendImageDataResponse {
+  (): Promise<void>;
+}
+
+type CustomCommandList = [
+  [CustomCommandSendAudioDataRequest, CustomCommandSendAudioDataResponse],
+  [CustomCommandSendImageDataRequest, CustomCommandSendImageDataResponse],
+];
 
 type CommandCodes = [...typeof Api.commandCodes, ...typeof customCommandCodes];
 type CommandCode = CommandCodes[number];
@@ -83,8 +103,12 @@ type Commands = {
   [P in CommandName]: Command<CommandNameToCode[P]>;
 };
 
-function isCommandSendData(arg: any, command: CommandCode): arg is CustomCommandSendDataRequest {
-  return command === 'send_data';
+function isCommandSendAudioData(arg: any, command: CommandCode): arg is CustomCommandSendAudioDataRequest {
+  return command === 'send_audio_data';
+}
+
+function isCommandSendImageData(arg: any, command: CommandCode): arg is CustomCommandSendImageDataRequest {
+  return command === 'send_image_data';
 }
 
 //
@@ -193,7 +217,8 @@ export {
   Awaits,
   CommandCode,
   CommandMap,
-  isCommandSendData,
+  isCommandSendAudioData,
+  isCommandSendImageData,
   EventCallbacks,
   EventNameToCode,
   EventName,
