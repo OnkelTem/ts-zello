@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.6](https://github.com/OnkelTem/ts-zello/compare/v0.0.5...v0.0.6) (2021-04-23)
+
+
+### Features
+
+* **images:** added send_image command, sendImage macro and on_image event and DataWaitPassThroughStream() middleware ([174f8cc](https://github.com/OnkelTem/ts-zello/commit/174f8ccf4746dee4b3c4bae6b6035072093e756a))
+
 ### [0.0.5](https://github.com/OnkelTem/ts-zello/compare/v0.0.4...v0.0.5) (2021-04-18)
 
 
