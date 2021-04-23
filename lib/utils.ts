@@ -1,7 +1,7 @@
 import { DeferredPromise, OpusInfo } from './types';
 import * as Api from './api';
 import { Logger } from 'pino';
-import { Duplex, DuplexOptions } from 'stream';
+import { Duplex, DuplexOptions, Transform, TransformCallback, TransformOptions } from 'stream';
 
 export function encodeCodecHeader(opusInfo: OpusInfo) {
   const buf = Buffer.alloc(4);
@@ -21,17 +21,24 @@ export function decodeCodecHeader(codecHeader: string): OpusInfo {
   };
 }
 
-export function packPacket(packet?: Api.Packet): Buffer | undefined {
-  if (packet != null) {
-    if (Api.isPacketAudio(packet)) {
-      const { data, streamId, packetId } = packet;
-      const buf = Buffer.concat([Buffer.alloc(9), data]);
-      buf.writeUInt8(Api.PacketTypes.AUDIO);
-      buf.writeUInt32BE(streamId, 1);
-      buf.writeUInt32BE(packetId, 5);
-      return buf;
-    }
+export function packPacket(packet: Api.Packet): Buffer {
+  if (Api.isPacketAudio(packet)) {
+    const { data, streamId, packetId } = packet;
+    const buf = Buffer.concat([Buffer.alloc(9), data]);
+    buf.writeUInt8(Api.PacketTypes.AUDIO);
+    buf.writeUInt32BE(streamId, 1);
+    buf.writeUInt32BE(packetId, 5);
+    return buf;
   }
+  if (Api.isPacketImage(packet)) {
+    const { data, imageId, packetType } = packet;
+    const buf = Buffer.concat([Buffer.alloc(9), data]);
+    buf.writeUInt8(Api.PacketTypes.IMAGE);
+    buf.writeUInt32BE(imageId, 1);
+    buf.writeUInt32BE(packetType, 5);
+    return buf;
+  }
+  throw new Error('Unknown packet type');
 }
 
 export function unpackPacket(data?: Buffer): Api.Packet | undefined {
@@ -46,7 +53,8 @@ export function unpackPacket(data?: Buffer): Api.Packet | undefined {
     } else if (data[0] === Api.PacketTypes.IMAGE) {
       return {
         type: Api.PacketTypes.IMAGE,
-        messageId: data.readUInt32BE(1),
+        imageId: data.readUInt32BE(1),
+        packetType: data.readUInt32BE(5),
         data: data.slice(9),
       };
     } else {
@@ -198,5 +206,23 @@ export class StabilizeStream extends Duplex {
     const reply = Buffer.concat(this.queue);
     this.push(reply);
     callback();
+  }
+}
+
+export type DataWaitPassThroughStreamOptions = TransformOptions;
+
+export class DataWaitPassThroughStream extends Transform {
+  dataIsReady: boolean = false;
+
+  constructor(opts?: DataWaitPassThroughStreamOptions) {
+    super(opts);
+  }
+
+  _transform(chunk: any, encoding: BufferEncoding, callback: TransformCallback) {
+    if (!this.dataIsReady) {
+      this.dataIsReady = true;
+      this.emit('dataIsReady');
+    }
+    callback(null, chunk);
   }
 }

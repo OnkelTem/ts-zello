@@ -3,7 +3,6 @@ import { Duplex, PassThrough, Readable } from 'stream';
 import { Logger } from 'pino';
 import { Channels, FFmpegArgs, FrameSize, OpusInfo, SamplingRate, StreamGetter, StreamGetterOptions } from './types';
 import * as Api from './api';
-import fs from 'fs';
 import { StabilizeStream, StabilizeStreamOptions } from './utils';
 
 // prettier-ignore
@@ -39,11 +38,7 @@ const DEFAULT_OPTIONS: Required<OpusOptions> = {
   frameSize: 20,
 };
 
-export async function getOpusReader(
-  inputStream: Readable,
-  parentLogger: Logger,
-  options?: OpusOptions | null,
-): Promise<OpusReader> {
+export async function getOpusReader(parentLogger: Logger, options?: OpusOptions | null): Promise<OpusReader> {
   const logger = parentLogger.child({ facility: 'getOpusReader' });
   logger.debug('Setting up OPUS reader');
 
@@ -69,21 +64,16 @@ export async function getOpusReader(
   }
 
   const opusInfo: OpusInfo = {
-    channels: channels,
+    channels,
     inputSampleRate: samplingRate,
-
     framesPerPacket: 1,
-    frameSize: frameSize,
+    frameSize,
   };
   logger.debug(opusInfo, 'OPUS info');
 
-  // Starting the stream to read out the metadata
-  logger.debug('Piping input stream to the encoder');
-  const opusStream = inputStream.pipe(encodeStream);
-
   return {
     opusInfo,
-    opusStream,
+    opusStream: encodeStream,
   };
 }
 
@@ -98,6 +88,51 @@ function isFFmpegDuration(arg: string): arg is FFmpegDuration {
 }
 
 export type FFmpegTempo = number;
+const FFmpegTempoDefault: FFmpegTempo = 1;
+
+export type FFmpegVolume = number;
+const FFmpegVolumeDefault: FFmpegVolume = 1;
+
+export type FFmpegNormalizer = {
+  // I, i
+  // Set integrated loudness target. Range is -70.0 - -5.0. Default value is -24.0.
+  integratedLoudness: number;
+  // LRA, lra
+  // Set loudness range target. Range is 1.0 - 20.0. Default value is 7.0.
+  loudnessRange: number;
+  // TP, tp
+  // Set maximum true peak. Range is -9.0 - +0.0. Default value is -2.0.
+  maximumPeak: number;
+};
+
+const FFmpegNormalizerDefaults: FFmpegNormalizer = {
+  integratedLoudness: -24.0,
+  loudnessRange: 7.0,
+  maximumPeak: -2.0,
+};
+
+export type FFmpegCompressor = {
+  // threshold
+  // If a signal of stream rises above this level it will affect the gain reduction. By default it is 0.125. Range is between 0.00097563 and 1.
+  threshold: number;
+  // ratio
+  // Set a ratio by which the signal is reduced. 1:2 means that if the level rose 4dB above the threshold, it will be only 2dB above after the reduction. Default is 2. Range is between 1 and 20.
+  ratio: number;
+  // attack
+  // Amount of milliseconds the signal has to rise above the threshold before gain reduction starts. Default is 20. Range is between 0.01 and 2000.
+  attack: number;
+  // release
+  // Amount of milliseconds the signal has to fall below the threshold before reduction is decreased again. Default is 250. Range is between 0.01 and 9000.
+  // threshold=-21dB:ratio=9:attack=200:release=1000
+  release: number;
+};
+
+const FFmpegCompressorDefaults: FFmpegCompressor = {
+  threshold: 0.125,
+  ratio: 2,
+  attack: 20,
+  release: 250,
+};
 
 function isFFmpegTempo(arg: number): arg is FFmpegTempo {
   return arg >= 0.5 && arg <= 2.0;
@@ -105,8 +140,10 @@ function isFFmpegTempo(arg: number): arg is FFmpegTempo {
 
 export type FileStreamOptions = {
   samplingRate?: SamplingRate;
-  volumeFactor?: number;
-  tempoFactor?: FFmpegTempo;
+  volumeFactor?: FFmpegVolume | null | boolean;
+  tempoFactor?: FFmpegTempo | null | boolean;
+  normalizer?: FFmpegNormalizer | null | boolean;
+  compressor?: FFmpegCompressor | null | boolean;
   startAt?: FFmpegDuration | null;
   endAt?: FFmpegDuration | null;
   ffmpegArgs?: FFmpegArgs;
@@ -115,8 +152,10 @@ export type FileStreamOptions = {
 const FILE_STREAM_DEFAULT_FFMPEG_ARGS: FFmpegArgs = ['-channel_layout', 'mono'];
 const FILE_STREAM_DEFAULT_OPTIONS: Required<FileStreamOptions> = {
   samplingRate: 48000,
-  volumeFactor: 0.5,
-  tempoFactor: 1,
+  volumeFactor: null,
+  tempoFactor: null,
+  normalizer: null,
+  compressor: null,
   startAt: null,
   endAt: null,
   ffmpegArgs: FILE_STREAM_DEFAULT_FFMPEG_ARGS,
@@ -169,8 +208,6 @@ export function initAudioStream(
       let resampleStream: Duplex | null = null;
       if (resample) {
         const resampleArguments = [
-          '-analyzeduration',
-          '0',
           '-loglevel',
           '0',
           '-f',
@@ -227,21 +264,19 @@ export function initAudioStream(
   };
 }
 
-export function getAudioFileStream(path: string, parentLogger: Logger, options?: FileStreamOptions): Readable {
-  const logger = parentLogger.child({ facility: 'getAudioFileStream' });
-
-  const rs = fs.createReadStream(path);
-  rs.on('error', (err) => {
-    logger.error(err, 'Read stream error');
-    throw err;
-  });
-  return getAutoDecodeStream(rs, logger, options);
-}
-
-export function getAutoDecodeStream(stream: Readable, parentLogger: Logger, options?: FileStreamOptions): Duplex {
+export function getAutoDecodeStream(parentLogger: Logger, options?: FileStreamOptions): Duplex {
   const logger = parentLogger.child({ facility: 'getAutoDecodeStream' });
 
-  const { samplingRate, volumeFactor, tempoFactor, startAt, endAt, ffmpegArgs }: Required<FileStreamOptions> =
+  const {
+    samplingRate,
+    volumeFactor,
+    tempoFactor,
+    normalizer,
+    compressor,
+    startAt,
+    endAt,
+    ffmpegArgs,
+  }: Required<FileStreamOptions> =
     options != null ? { ...FILE_STREAM_DEFAULT_OPTIONS, ...options } : FILE_STREAM_DEFAULT_OPTIONS;
 
   // From ... to ...
@@ -263,10 +298,55 @@ export function getAutoDecodeStream(stream: Readable, parentLogger: Logger, opti
   }
 
   const filters: string[] = [];
+  if (compressor != null && compressor !== false) {
+    let c: FFmpegCompressor;
+    if (compressor === true) {
+      // use defaults
+      c = FFmpegCompressorDefaults;
+    } else {
+      // merge with defaults
+      c = { ...compressor, ...FFmpegCompressorDefaults };
+    }
+    filters.push(`acompressor=threshold=${c.threshold}:ratio=${c.ratio}:attack=${c.attack}:release=${c.release}`);
+  }
+
+  if (normalizer != null && normalizer !== false) {
+    let n: FFmpegNormalizer;
+    if (normalizer === true) {
+      // use defaults
+      n = FFmpegNormalizerDefaults;
+    } else {
+      // merge with defaults
+      n = { ...normalizer, ...FFmpegNormalizerDefaults };
+    }
+    filters.push(`loudnorm=i=${n.integratedLoudness}:lra=${n.loudnessRange}:tp=${n.maximumPeak}`);
+  }
+
   filters.push(`aresample=${samplingRate}`);
-  filters.push(`volume=${volumeFactor}`);
-  if (tempoFactor !== 1 && isFFmpegTempo(tempoFactor)) {
-    filters.push(`atempo=${tempoFactor}`);
+
+  if (volumeFactor != null && volumeFactor !== false) {
+    let v: FFmpegVolume;
+    if (volumeFactor === true) {
+      // use default
+      v = FFmpegVolumeDefault;
+    } else {
+      v = volumeFactor;
+    }
+    filters.push(`volume=${v}`);
+  }
+  if (tempoFactor != null && tempoFactor !== false) {
+    let t: FFmpegTempo;
+    if (tempoFactor === true) {
+      // use default
+      t = FFmpegTempoDefault;
+    } else {
+      t = tempoFactor;
+    }
+    if (isFFmpegTempo(t)) {
+      filters.push(`atempo=${t}`);
+    } else {
+      logger.warn(`Ignoring non-valid volume parameter: ${t}`);
+    }
   }
 
   // Create transcoder stream
@@ -294,5 +374,5 @@ export function getAutoDecodeStream(stream: Readable, parentLogger: Logger, opti
     logger.error(err, 'Transcoder stream error');
     throw err;
   });
-  return stream.pipe(transcodeStream);
+  return transcodeStream;
 }
