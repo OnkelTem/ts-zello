@@ -3,7 +3,7 @@ import prism from 'prism-media';
 import Speaker from 'speaker';
 
 import { cred1 } from './utils';
-import zello, { DEFAULT_ZELLO_OPTIONS, Zello, StabilizeStream, StabilizeStreamOptions } from '../lib';
+import zello, { DEFAULT_ZELLO_OPTIONS, Zello, StabilizeStream, StabilizeStreamOptions } from '../src';
 import { getBitrateStatsStream } from './utils';
 
 const pinoLogger = pino(DEFAULT_ZELLO_OPTIONS.logger);

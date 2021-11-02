@@ -388,13 +388,13 @@ async function zello<R>(
     sendImageData: setCommandHandler('send_image_data'),
   };
 
+  // Starting WebSocket client
+
   try {
     ws = await new Promise<WebSocket>(function (resolve, reject) {
       try {
         logger.debug(`Connecting to: ${address}`);
-        const ws = new WebSocket(address, {
-          host: 'zello.io',
-        });
+        const ws = new WebSocket(address);
         ws.addEventListener(
           'open',
           () => {

@@ -3,13 +3,13 @@ import * as Api from '../api';
 import { Macro } from '../types';
 import { getImageReader } from '../image';
 
-type Options = {
+export type SendImageOptions = {
   transcode?: OpusOptions;
 };
 
-type SendImage = (inputData: Buffer, options?: Options) => Promise<any>;
+export type SendImage = (inputData: Buffer, options?: SendImageOptions) => Promise<any>;
 
-const sendImage: Macro<SendImage> = function ({ commands, logger }) {
+export const sendImage: Macro<SendImage> = function ({ commands, logger }) {
   return async function (imageData: Buffer) {
     const { imageInfo, fullSizeData, thumbnailData } = await getImageReader(imageData);
     let resp: Api.CommandSendImageResponse;
@@ -36,5 +36,3 @@ const sendImage: Macro<SendImage> = function ({ commands, logger }) {
     logger.info('Image sent.');
   };
 };
-
-export default sendImage;

@@ -1,7 +1,7 @@
 import pino from 'pino';
 import Speaker from 'speaker';
 
-import zello, { DEFAULT_ZELLO_OPTIONS, Zello } from '../lib';
+import zello, { DEFAULT_ZELLO_OPTIONS, Zello } from '../src';
 import { cred1 } from './utils';
 
 const pinoLogger = pino(DEFAULT_ZELLO_OPTIONS.logger);

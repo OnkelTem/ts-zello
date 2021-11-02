@@ -9,26 +9,28 @@ import * as Api from '../api';
 import { DataWaitPassThroughStream, encodeCodecHeader } from '../utils';
 import { Macro } from '../types';
 
-type RetryStrategy = {
+export type RetryStrategy = {
   during: number;
   retries: number;
   delay: number;
 };
 
-type Options = {
+export type SendAudioOptions = {
   retry?: Partial<RetryStrategy>;
   transcode?: OpusOptions;
 };
 
-const DEFAULT_RETRY_STRATEGY: RetryStrategy = {
+export const DEFAULT_RETRY_STRATEGY: RetryStrategy = {
   during: 0,
   retries: 0,
   delay: 3,
 };
 
-type SendAudio = (inputStream: Readable, options?: Options) => Promise<any>;
+export type SendAudioResult = () => Promise<void>;
 
-const sendAudio: Macro<SendAudio> = function ({ commands, logger }) {
+export type SendAudio = (inputStream: Readable, options?: SendAudioOptions) => Promise<SendAudioResult>;
+
+export const sendAudio: Macro<SendAudio> = function ({ commands, logger }) {
   return async function (inputStream, options) {
     const retry: RetryStrategy = {
       ...DEFAULT_RETRY_STRATEGY,
@@ -75,6 +77,7 @@ const sendAudio: Macro<SendAudio> = function ({ commands, logger }) {
           // Check retry conditions
           if (
             // Reached the number of attempts
+            retry.retries > 0 &&
             retryCounters.attempt >= retry.retries + 1 &&
             // Reached time limit
             new Date().getTime() - retryCounters.startAtMs >= retry.during * 1000
@@ -100,25 +103,25 @@ const sendAudio: Macro<SendAudio> = function ({ commands, logger }) {
     }
     logger.info('Got the button!');
     logger.debug(`stream_id: ${resp.stream_id}`);
-    const { stream: outStream } = await commands.sendAudioData({
-      streamId: resp.stream_id,
-      frameSize: opusInfo.frameSize,
-    });
-    // TODO: Fix the problem with rising exception when stream gets destroyed
-    //       https://dev.to/morz/pipeline-api-the-best-way-to-handle-stream-errors-that-nobody-tells-you-about-122o
-    logger.info('Start streaming...');
-    try {
-      readyInputStream.pipe(opusStream).pipe(outStream);
-      await pEvent(outStream, ['close', 'finish']);
-    } catch (err) {
-      logger.error(err, 'ERROR');
-    }
-    // TODO: Don't send stop stream if we were interrupted
-    await commands.stopStream({
-      streamId: resp.stream_id,
-    });
-    logger.info('Stopped streaming!');
+    return async function () {
+      const { stream: outStream } = await commands.sendAudioData({
+        streamId: resp.stream_id,
+        frameSize: opusInfo.frameSize,
+      });
+      // TODO: Fix the problem with rising exception when stream gets destroyed
+      //       https://dev.to/morz/pipeline-api-the-best-way-to-handle-stream-errors-that-nobody-tells-you-about-122o
+      logger.info('Start streaming...');
+      try {
+        readyInputStream.pipe(opusStream).pipe(outStream);
+        await pEvent(outStream, ['close', 'finish']);
+      } catch (err) {
+        logger.error(err, 'ERROR');
+      }
+      // TODO: Don't send stop stream if we were interrupted
+      await commands.stopStream({
+        streamId: resp.stream_id,
+      });
+      logger.info('Stopped streaming!');
+    };
   };
 };
-
-export default sendAudio;

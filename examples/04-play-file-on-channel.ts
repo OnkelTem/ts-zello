@@ -1,7 +1,7 @@
 import fs from 'fs';
 import pino from 'pino';
 import { cred1 } from './utils';
-import zello, { DEFAULT_ZELLO_OPTIONS, Zello, getAutoDecodeStream } from '../lib';
+import zello, { DEFAULT_ZELLO_OPTIONS, Zello, getAutoDecodeStream } from '../src';
 
 const pinoLogger = pino(DEFAULT_ZELLO_OPTIONS.logger);
 
@@ -32,9 +32,11 @@ async function main() {
   try {
     await z.ctl.run(function* ({ macros }) {
       yield macros.login(cred1);
-      yield macros.sendAudio(stream, {
-        transcode: { samplingRate, frameSize, bitrateKbps: 32, channels: 1 },
-      });
+      yield macros
+        .sendAudio(stream, {
+          transcode: { samplingRate, frameSize, bitrateKbps: 32, channels: 1 },
+        })
+        .then((f) => f());
     });
   } catch (err) {
     console.log(err);

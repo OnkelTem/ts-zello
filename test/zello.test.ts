@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync, unlinkSync } from 'fs';
-import zello, { CommandLogonRequest, getAutoDecodeStream } from '../lib';
+import zello, { CommandLogonRequest, getAutoDecodeStream } from '../src';
 import fs from 'fs';
 import prism from 'prism-media';
 import pEvent from 'p-event';
@@ -160,7 +160,7 @@ test('should send mp3 file to the channel and get "on_start_stream" event with a
   const stream = fs.createReadStream(path).pipe(getAutoDecodeStream(z1.logger));
   const [res] = await Promise.all([
     z2.awaits.onStreamStart((event) => event.from === cred1.username, 5000),
-    z1.macros.sendAudio(stream),
+    z1.macros.sendAudio(stream).then((f) => f()),
   ]);
   await delay(2000);
   expect(!!res).toBe(true);
@@ -189,7 +189,7 @@ test('should send mp3 file to the channel and receive it with another bot', asyn
         await pEvent(stream, 'finish');
         return 1;
       }),
-    z1.macros.sendAudio(stream, { transcode: { bitrateKbps: 32 } }),
+    z1.macros.sendAudio(stream, { transcode: { bitrateKbps: 32 } }).then((f) => f()),
   ]);
   expect(!!res).toBe(true);
   await z1.ctl.close();
@@ -224,7 +224,7 @@ test('should send mp3 file to the channel save it with another bot', async () =>
         }
         return 1;
       }),
-    z1.macros.sendAudio(stream, {}),
+    z1.macros.sendAudio(stream, {}).then((f) => f()),
   ]);
   expect(!!res).toBe(true);
   expect(size).toBeGreaterThan(0);
@@ -242,3 +242,55 @@ test('should send an image to the channel', async () => {
   await z.macros.sendImage(fs.readFileSync(IMAGE));
   await z.ctl.close();
 });
+
+test('should send mp3 file to the channel but preface is with a text message', async () => {
+  const path = MP3;
+  const z1 = await zello(ZELLO_SERVER, { name: 'sender' });
+  const z2 = await zello(ZELLO_SERVER, { name: 'receiver' });
+  await z1.macros.login(cred1);
+  await z2.macros.login(cred2);
+  await delay(2000);
+  const stream = fs.createReadStream(path).pipe(getAutoDecodeStream(z1.logger));
+  const [res] = await Promise.all([
+    z2.awaits.onTextMessage((event) => event.from === cred1.username && event.text === 'Stream is ready!', 5000),
+    z2.awaits.onStreamStart((event) => event.from === cred1.username, 5000),
+    (async function () {
+      const res = await z1.macros.sendAudio(stream);
+      // Here we can send text message and wait for some time
+      await delay(1000);
+      await z1.commands.sendTextMessage({ text: 'Stream is ready!' });
+      await delay(1000);
+      return res();
+    })(),
+  ]);
+  await delay(2000);
+  expect(!!res).toBe(true);
+  await z1.ctl.close();
+  await z2.ctl.close();
+}, 20000);
+
+test('...', async () => {
+  const path = MP3;
+  const z1 = await zello(ZELLO_SERVER, { name: 'sender' });
+  const z2 = await zello(ZELLO_SERVER, { name: 'receiver' });
+  await z1.macros.login(cred1);
+  await z2.macros.login(cred2);
+  await delay(2000);
+  const stream = fs.createReadStream(path).pipe(getAutoDecodeStream(z1.logger));
+  const [res] = await Promise.all([
+    z2.awaits.onTextMessage((event) => event.from === cred1.username && event.text === 'Stream is ready!', 15000),
+    z2.awaits.onStreamStart((event) => event.from === cred1.username, 15000),
+    (async function () {
+      const res = await z1.macros.sendAudio(stream, { retry: { retries: 30 } });
+      // Here we can send text message and wait for some time
+      await delay(1000);
+      await z1.commands.sendTextMessage({ text: 'Stream is ready!' });
+      await delay(1000);
+      return res();
+    })(),
+  ]);
+  await delay(2000);
+  expect(!!res).toBe(true);
+  await z1.ctl.close();
+  await z2.ctl.close();
+}, 30000);

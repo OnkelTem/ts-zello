@@ -82,7 +82,7 @@ export type FFmpegDuration = string;
 
 const reFFmpegDuration = /^((\d{2}:)?\d{2}:\d{2}(\.\d+)?|\d+(\.\d+)?(s|ms|us)?)$/gm;
 
-function isFFmpegDuration(arg: string): arg is FFmpegDuration {
+export function isFFmpegDuration(arg: string): arg is FFmpegDuration {
   // Either [-][HH:]MM:SS[.m...] or [-]S+[.m...][s|ms|us]
   return !!arg.match(reFFmpegDuration);
 }
@@ -134,7 +134,7 @@ const FFmpegCompressorDefaults: FFmpegCompressor = {
   release: 250,
 };
 
-function isFFmpegTempo(arg: number): arg is FFmpegTempo {
+export function isFFmpegTempo(arg: number): arg is FFmpegTempo {
   return arg >= 0.5 && arg <= 2.0;
 }
 

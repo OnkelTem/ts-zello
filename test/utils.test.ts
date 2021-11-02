@@ -2,10 +2,10 @@ import delay from 'delay';
 import pino from 'pino';
 import { Readable, Writable } from 'stream';
 
-import '../lib/config';
-import * as utils from '../lib/utils';
-import * as Api from '../lib/api';
-import { DEFAULT_LOGGER_OPTIONS } from '../lib';
+import '../src/config';
+import * as utils from '../src/utils';
+import * as Api from '../src/api';
+import { DEFAULT_LOGGER_OPTIONS } from '../src';
 
 test('test packet pack', () => {
   const buf = Buffer.from(new Uint8Array([1, 2, 3]));

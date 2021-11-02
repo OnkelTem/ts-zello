@@ -5,3 +5,4 @@ export * from './types';
 export * from './audio';
 export * from './utils';
 export * from './logger';
+export * from './macros';

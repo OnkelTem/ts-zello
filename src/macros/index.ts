@@ -1,6 +1,6 @@
 import login from './login';
-import sendAudio from './sendAudio';
-import sendImage from './sendImage';
+import { sendAudio } from './sendAudio';
+import { sendImage } from './sendImage';
 import { Macro, ZelloMacro } from '../types';
 
 function setMacroHandler<T>(macro: Macro<T>, props: ZelloMacro) {
@@ -16,3 +16,4 @@ function getMacros(props: ZelloMacro) {
 }
 
 export { getMacros };
+export * from './sendAudio';

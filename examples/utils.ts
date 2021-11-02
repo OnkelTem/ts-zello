@@ -1,5 +1,5 @@
 import { Duplex, Transform, Writable } from 'stream';
-import { CommandLogonRequest, FRAME_SIZE_MAP } from '../lib';
+import { CommandLogonRequest, FRAME_SIZE_MAP } from '../src';
 import { Logger } from 'pino';
 import { readFileSync } from 'fs';
 

@@ -5,5 +5,5 @@
     "outDir": "dist",
     "declaration": true
   },
-  "include": ["lib", "test", "examples"]
+  "include": ["src", "test", "examples"]
 }
