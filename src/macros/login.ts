@@ -20,7 +20,7 @@ const login: Macro<Login> = function ({ commands, logger, awaits }) {
         if (resp.error != null) {
           throw new Error(resp.error);
         }
-        const isAuthorized = resp.success != null && resp.success && resp.refresh_token != null;
+        const isAuthorized = resp.success != null && resp.success; /* && resp.refresh_token != null */
         if (!isAuthorized) {
           throw new Error('authorization failed');
         }

@@ -56,3 +56,9 @@ Basically because it's a popular and yet ~~normal~~ statically typed programming
 - [ ] Finish this README
 - [ ] Publish on http://npmjs.com
 
+## Contribution
+
+```
+$ sudo apt-get install libasound2-dev
+```
+

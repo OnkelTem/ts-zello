@@ -17,6 +17,7 @@ export const sendImage: Macro<SendImage> = function ({ commands, logger }) {
       resp = await commands.sendImage({
         content_length: imageInfo.length,
         thumbnail_content_length: imageInfo.thumbnail_length,
+        channel: 'ts-zello',
         width: imageInfo.width,
         height: imageInfo.height,
         type: Api.ImageTypes.JPEG,

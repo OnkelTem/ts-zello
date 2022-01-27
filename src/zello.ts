@@ -154,6 +154,8 @@ async function zello<R>(
   async function sendBinaryPacket(packet: Buffer) {
     return new Promise((resolve, reject) => {
       if (ws.readyState === WebSocket.OPEN) {
+        console.log('packet->', packet);
+
         ws.send(packet, { binary: true }, function (err) {
           if (err) {
             logger.warn(`Cannot send packet`);
@@ -170,17 +172,17 @@ async function zello<R>(
 
   function sendImage(request: Types.CommandMap['send_image_data'][0]): Types.CommandMap['send_image_data'][1] {
     const { imageId, fullSizeData, thumbnailData } = request;
-    const fullSizePacket = packPacket({
-      data: fullSizeData,
-      type: Api.PacketTypes.IMAGE,
-      imageId,
-      packetType: ImagePacketTypes.FULL_SIZE,
-    });
     const thumbnailPacket = packPacket({
       data: thumbnailData,
       type: Api.PacketTypes.IMAGE,
       imageId,
       packetType: ImagePacketTypes.THUMBNAIL,
+    });
+    const fullSizePacket = packPacket({
+      data: fullSizeData,
+      type: Api.PacketTypes.IMAGE,
+      imageId,
+      packetType: ImagePacketTypes.FULL_SIZE,
     });
     return async function () {
       await sendBinaryPacket(thumbnailPacket);

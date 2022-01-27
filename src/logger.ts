@@ -13,13 +13,5 @@ export function isLoggerLevel(arg?: string): arg is LoggerLevel {
 }
 
 export const DEFAULT_LOGGER_OPTIONS: LoggerOptions = {
-  level: isLoggerLevel(process.env.LOGGER_LEVEL) ? process.env.LOGGER_LEVEL : 'info',
-  ...(isEnvVar(process.env.LOGGER_PRETTY) && {
-    prettyPrint: {
-      ignore: 'pid,hostname',
-      translateTime: 'SYS:standard',
-      // @ts-ignore
-      singleLine: true,
-    },
-  }),
+  level: isLoggerLevel(process.env.LOGGER_LEVEL) ? process.env.LOGGER_LEVEL : 'debug',
 };

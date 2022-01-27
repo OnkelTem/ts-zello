@@ -67,6 +67,7 @@ interface CommandStopStreamResponse extends CommandResponse {}
 
 interface CommandSendImageRequest extends CommandRequestBase {
   command: 'send_image';
+  channel: string;
   type: ImageType;
   source: ImageSource;
   for?: string;
